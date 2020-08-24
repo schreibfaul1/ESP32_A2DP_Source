@@ -10,20 +10,21 @@
 #include "esp_bt_device.h"
 
 extern String BT_DEVICE_NAME;
-extern String BT_SINK;
 
-
-static xQueueHandle s_bt_app_task_queue = NULL;
-static xTaskHandle s_bt_app_task_handle = NULL;
-static esp_bd_addr_t s_peer_bda = {0};
-static uint8_t s_peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
-static int s_a2d_state = APP_AV_STATE_IDLE;
-static int s_media_state = APP_AV_MEDIA_STATE_IDLE;
-static int s_intv_cnt = 0;
-static int s_connecting_intv = 0;
-static uint32_t s_pkt_cnt = 0;
+static xQueueHandle      s_bt_app_task_queue  = NULL;
+static xTaskHandle       s_bt_app_task_handle = NULL;
+static esp_bd_addr_t     s_peer_bda           = {0};
+static uint8_t           s_peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
+static int               s_a2d_state          = APP_AV_STATE_IDLE;
+static int               s_media_state        = APP_AV_MEDIA_STATE_IDLE;
+static int               s_intv_cnt           = 0;
+static int               s_connecting_intv    = 0;
+static uint32_t          s_pkt_cnt            = 0;
+static String            s_BT_sink_name       = "";
+static esp_bt_pin_code_t s_pin_code           = "";
+static int               s_pin_code_length    = 0;
 //static esp_avrc_rn_evt_cap_mask_t s_avrc_peer_rn_cap;
-static TimerHandle_t s_tmr;
+static TimerHandle_t     s_tmr;
 
 //---------------------------------------------------------------------------------------------------------------------
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback)
@@ -204,6 +205,7 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
             break;
         case ESP_BT_GAP_DEV_PROP_EIR:
             eir = (uint8_t *)(p->val);
+            log_i("eir %i", eir);
             break;
         case ESP_BT_GAP_DEV_PROP_BDNAME:
         default:
@@ -214,13 +216,14 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
     /* search for device with MAJOR service class as "rendering" in COD */
     if (!esp_bt_gap_is_valid_cod(cod) ||
             !(esp_bt_gap_get_cod_srvc(cod) & ESP_BT_COD_SRVC_RENDERING)) {
+        log_i("cod is not valid");
         return;
     }
 
     /* search for device named  BT_SINK in its extended inqury response */
     if (eir) {
         get_name_from_eir(eir, s_peer_bdname, NULL);
-        if (strcmp((char *)s_peer_bdname,  BT_SINK.c_str()) != 0) {
+        if (strcmp((char *)s_peer_bdname,  s_BT_sink_name.c_str()) != 0) {
             return;
         }
 
@@ -272,13 +275,15 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
             esp_bt_pin_code_t pin_code = {0};
             esp_bt_gap_pin_reply(param->pin_req.bda, true, 16, pin_code);
         } else {
-            log_i("Input pin code: 1234");
-            esp_bt_pin_code_t pin_code;
-            pin_code[0] = '1';
-            pin_code[1] = '2';
-            pin_code[2] = '3';
-            pin_code[3] = '4';
-            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
+//            log_i("Input pin code: 1234");
+//            esp_bt_pin_code_t pin_code;
+//            pin_code[0] = '1';
+//            pin_code[1] = '2';
+//            pin_code[2] = '3';
+//            pin_code[3] = '4';
+//            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
+            log_i("Input pin code: %s", s_pin_code);
+            esp_bt_gap_pin_reply(param->pin_req.bda, true, s_pin_code_length, s_pin_code);
         }
         break;
     }
@@ -458,12 +463,12 @@ void bt_app_av_media_proc(uint16_t event, void *param){
         }
         case APP_AV_MEDIA_STATE_STARTED: {
             if (event == BT_APP_HEART_BEAT_EVT) {
-                if (++s_intv_cnt >= 10) {
-                    log_i("a2dp media stopping...");
-                    esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_STOP);
-                    s_media_state = APP_AV_MEDIA_STATE_STOPPING;
-                    s_intv_cnt = 0;
-                }
+//                if (++s_intv_cnt >= 2) { // was 10
+//                    log_i("a2dp media stopping...");
+//                    esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_STOP);
+//                    s_media_state = APP_AV_MEDIA_STATE_STOPPING;
+//                    s_intv_cnt = 0;
+//                }
             }
             break;
         }
@@ -546,4 +551,46 @@ void bt_app_av_state_disconnecting(uint16_t event, void *param){
         break;
     }
 }
+//---------------------------------------------------------------------------------------------------------------------
+int get_APP_AV_STATE(){
+    return s_a2d_state;
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool a2dp_source_init(String deviceName, String pinCode){
+    esp_err_t res;
+    s_BT_sink_name = deviceName;
+    int s_pin_code_length = pinCode.length();
+    for(int i=0; i<s_pin_code_length; i++)
+        s_pin_code[i] = pinCode[i];
 
+    do{  // release controller memory
+        res= esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+    }while(res==0);
+
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT(); //controller init
+
+    res = esp_bt_controller_init(&bt_cfg);
+    if(res != ESP_OK){log_e("initialize controller failed %d", res); return false;}
+
+    res = esp_bt_controller_enable(ESP_BT_MODE_BTDM); // enable BT
+    if(res != ESP_OK){log_e("enable controller failed %d", res); return false;}
+
+    res = esp_bluedroid_init(); // init bluedroid
+    if(res != ESP_OK){log_e("initialize bluedroid failed"); return false;}
+
+    res = esp_bluedroid_enable(); // activate bluedroid
+    if(res != ESP_OK){log_e("enable bluedroid failed"); return false;}
+
+    perform_wipe_security_db(); // delete pair devices
+    bt_app_task_start_up(); // create application task
+    /* Bluetooth device name, connection mode and profile set up */
+    bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0, NULL);
+
+    // Set default parameters for Legacy Pairing, use variable pin, input pin code when pairing
+    esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
+    esp_bt_pin_code_t pin_code;
+    esp_bt_gap_set_pin(pin_type, 0, pin_code);
+
+
+    return true;
+}

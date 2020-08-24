@@ -32,7 +32,8 @@
 #define SPI_MISO      19
 #define SPI_SCK       18
 
-String BT_SINK        = "Manhattan-165327"; // BT loudspeaker
+String BT_SINK_NAME   = "Manhattan-165327"; // BT loudspeaker
+String BT_SINK_PIN    = "1234";
 String BT_DEVICE_NAME = "ESP_A2DP_SRC";     // source devicename
 
 File            audiofile;    // @suppress("Abstract class cannot be instantiated")
@@ -41,6 +42,7 @@ uint32_t        sampleRate;
 uint32_t        bitRate;
 uint8_t         channels;
 uint8_t         bitsPerSample=16;
+uint32_t        posDataSection;
 
 //---------------------------------------------------------------------------------------------------------------------
 bool parseWAV(fs::FS &fs, String path){
@@ -127,6 +129,7 @@ bool parseWAV(fs::FS &fs, String path){
         cs = chbuf[0] + (chbuf[1] <<8) + (chbuf[2] <<16) + (chbuf[3] <<24) - 44;
         sprintf(chbuf, "DataLength=%u\n", cs);
         Serial.print(chbuf);
+        posDataSection = audiofile.position();
         return true;
     }
     return false;
@@ -134,53 +137,23 @@ bool parseWAV(fs::FS &fs, String path){
 
 //---------------------------------------------------------------------------------------------------------------------
 void setup(){
-
-    esp_err_t res;
-
     Serial.begin(115200);
-
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SD.begin(SD_CS);
     parseWAV(SD, "/cola.wav");
-
-    do{  // release controller memory
-        res= esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
-    }while(res==0);
-
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT(); //controller init
-
-    res = esp_bt_controller_init(&bt_cfg);
-    if(res != ESP_OK){log_e("initialize controller failed %d", res); return;}
-
-    res = esp_bt_controller_enable(ESP_BT_MODE_BTDM); // enable BT
-    if(res != ESP_OK){log_e("enable controller failed %d", res); return;}
-
-    res = esp_bluedroid_init(); // init bluedroid
-    if(res != ESP_OK){log_e("initialize bluedroid failed"); return;}
-
-    res = esp_bluedroid_enable(); // activate bluedroid
-    if(res != ESP_OK){log_e("enable bluedroid failed"); return;}
-
-    perform_wipe_security_db(); // delete pair devices
-    bt_app_task_start_up(); // create application task
-    /* Bluetooth device name, connection mode and profile set up */
-    bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0, NULL);
-
-    // Set default parameters for Legacy Pairing, use variable pin, input pin code when pairing
-    esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
-    esp_bt_pin_code_t pin_code;
-    esp_bt_gap_set_pin(pin_type, 0, pin_code);
+    a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void loop() {}
 //---------------------------------------------------------------------------------------------------------------------
-
 int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len) // BT data event
 {
     if (len < 0 || data == NULL) {
         return 0;
     }
-    return audiofile.read(data, len);
+    len = audiofile.read(data, len);
+    if(len == 0) audiofile.seek(posDataSection); // EOF? enless loop
+    return len;
 }
 
 

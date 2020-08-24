@@ -90,5 +90,6 @@ void bt_app_av_state_connecting(uint16_t event, void *param);
 void bt_app_av_media_proc(uint16_t event, void *param);
 void bt_app_av_state_connected(uint16_t event, void *param);
 void bt_app_av_state_disconnecting(uint16_t event, void *param);
-
+int get_APP_AV_STATE();
+bool a2dp_source_init(String deviceName, String pinCode);
 #endif /* A2DP_SOURCE_H_ */
