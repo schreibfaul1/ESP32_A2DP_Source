@@ -29,7 +29,7 @@ static TimerHandle_t     s_tmr;
 //---------------------------------------------------------------------------------------------------------------------
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback)
 {
-    ESP_LOGD(BT_APP_CORE_TAG, "%s event 0x%x, param len %d", __func__, event, param_len);
+    log_i("event 0x%x, param len %d", event, param_len);
 
     bt_app_msg_t msg;
     memset(&msg, 0, sizeof(bt_app_msg_t));
@@ -60,7 +60,7 @@ bool bt_app_send_msg(bt_app_msg_t *msg){
     }
 
     if (xQueueSend(s_bt_app_task_queue, msg, 10 / portTICK_RATE_MS) != pdTRUE) {
-        ESP_LOGE(BT_APP_CORE_TAG, "%s xQueue send failed", __func__);
+        log_e("xQueue send failed");
         return false;
     }
     return true;
@@ -76,13 +76,13 @@ void bt_app_task_handler(void *arg){
     bt_app_msg_t msg;
     for (;;) {
         if (pdTRUE == xQueueReceive(s_bt_app_task_queue, &msg, (portTickType)portMAX_DELAY)) {
-            ESP_LOGD(BT_APP_CORE_TAG, "%s, sig 0x%x, 0x%x", __func__, msg.sig, msg.event);
+            log_i("sig 0x%x, 0x%x", msg.sig, msg.event);
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
                 bt_app_work_dispatched(&msg);
                 break;
             default:
-                ESP_LOGW(BT_APP_CORE_TAG, "%s, unhandled sig: %d", __func__, msg.sig);
+                log_i("unhandled sig: %d",msg.sig);
                 break;
             } // switch (msg.sig)
 
@@ -344,28 +344,27 @@ void a2d_app_heart_beat(void *arg){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_sm_hdlr(uint16_t event, void *param){
-    log_i("state %d, evt 0x%x: ",s_a2d_state, event);
     switch (s_a2d_state) {
     case APP_AV_STATE_DISCOVERING:
-        log_i("APP_AV_STATE_DISCOVERING");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERING",s_a2d_state, event);
         break;
     case APP_AV_STATE_DISCOVERED:
-        log_i("APP_AV_STATE_DISCOVERED");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERED",s_a2d_state, event);
         break;
     case APP_AV_STATE_UNCONNECTED:
-        log_i("APP_AV_STATE_UNCONNECTED");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_UNCONNECTED",s_a2d_state, event);
         bt_app_av_state_unconnected(event, param);
         break;
     case APP_AV_STATE_CONNECTING:
-        log_i("APP_AV_STATE_CONNECTING");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTING",s_a2d_state, event);
         bt_app_av_state_connecting(event, param);
         break;
     case APP_AV_STATE_CONNECTED:
-        log_i("APP_AV_STATE_CONNECTED");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTED",s_a2d_state, event);
         bt_app_av_state_connected(event, param);
         break;
     case APP_AV_STATE_DISCONNECTING:
-        log_i("APP_AV_STATE_DISCONNECTING");
+        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCONNECTING",s_a2d_state, event);
         bt_app_av_state_disconnecting(event, param);
         break;
     default:
@@ -383,7 +382,7 @@ void bt_app_av_state_unconnected(uint16_t event, void *param){
         break;
     case BT_APP_HEART_BEAT_EVT: {
         uint8_t *p = s_peer_bda;
-        log_i("Heartbeat Event: a2dp most recent peer connection: %s @ %02x:%02x:%02x:%02x:%02x:%02x\n",
+        log_i("Heartbeat Event: a2dp most recent peer connection: %s @ %02x:%02x:%02x:%02x:%02x:%02x",
                  s_peer_bdname, p[0], p[1], p[2], p[3], p[4], p[5]);
         esp_a2d_source_connect(s_peer_bda);
         s_a2d_state = APP_AV_STATE_CONNECTING;
@@ -438,7 +437,7 @@ void bt_app_av_media_proc(uint16_t event, void *param){
                 a2d = (esp_a2d_cb_param_t *)(param);
                 if (a2d->media_ctrl_stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY &&
                         a2d->media_ctrl_stat.status == ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
-                    log_i("a2dp media ready, starting ...\n");
+                    log_i("a2dp media ready, starting ...");
                     esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
                     s_media_state = APP_AV_MEDIA_STATE_STARTING;
                 }
@@ -492,7 +491,7 @@ void bt_app_av_media_proc(uint16_t event, void *param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_state_connected(uint16_t event, void *param){
-    ESP_LOGI(CUSTOM_AR_TAG, "%s Event called: %d", __func__, event);
+    log_i("Event called: %d",event);
     esp_a2d_cb_param_t *a2d = NULL;
     switch (event) {
         case ESP_A2D_CONNECTION_STATE_EVT: {
@@ -581,7 +580,7 @@ bool a2dp_source_init(String deviceName, String pinCode){
     res = esp_bluedroid_enable(); // activate bluedroid
     if(res != ESP_OK){log_e("enable bluedroid failed"); return false;}
 
-    perform_wipe_security_db(); // delete pair devices
+//    perform_wipe_security_db(); // delete pair devices
     bt_app_task_start_up(); // create application task
     /* Bluetooth device name, connection mode and profile set up */
     bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0, NULL);
