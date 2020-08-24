@@ -1,5 +1,5 @@
 # ESP32-A2DP-Source
-Arduino version
+Arduino version, plays wave files via Bluetooth connection
 
 
 Breadboard
