@@ -142,7 +142,6 @@ void setup(){
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SD.begin(SD_CS);
     parseWAV(SD, "/cola.wav");
-    //a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
     a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
 }
 //---------------------------------------------------------------------------------------------------------------------
