@@ -32,9 +32,9 @@
 #define SPI_MISO      19
 #define SPI_SCK       18
 
-String BT_SINK_NAME   = "Manhattan-165327"; // BT loudspeaker
-String BT_SINK_PIN    = "1234";
-String BT_DEVICE_NAME = "ESP_A2DP_SRC";     // source devicename
+char BT_SINK_NAME[]   = "Manhattan-165327"; // sink devicename
+char BT_SINK_PIN[]    = "1234";             // sink pincode
+char BT_DEVICE_NAME[] = "ESP_A2DP_SRC";     // source devicename
 
 File            audiofile;    // @suppress("Abstract class cannot be instantiated")
 
@@ -43,6 +43,7 @@ uint32_t        bitRate;
 uint8_t         channels;
 uint8_t         bitsPerSample=16;
 uint32_t        posDataSection;
+
 
 //---------------------------------------------------------------------------------------------------------------------
 bool parseWAV(fs::FS &fs, String path){
@@ -141,6 +142,7 @@ void setup(){
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SD.begin(SD_CS);
     parseWAV(SD, "/cola.wav");
+    //a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
     a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
 }
 //---------------------------------------------------------------------------------------------------------------------
