@@ -26,10 +26,12 @@ static int               s_pin_code_length    = 0;
 //static esp_avrc_rn_evt_cap_mask_t s_avrc_peer_rn_cap;
 static TimerHandle_t     s_tmr;
 
+bool logi = false; // disable logging
+
 //---------------------------------------------------------------------------------------------------------------------
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback)
 {
-    log_i("event 0x%x, param len %d", event, param_len);
+    if(logi) log_i("event 0x%x, param len %d", event, param_len);
 
     bt_app_msg_t msg;
     memset(&msg, 0, sizeof(bt_app_msg_t));
@@ -76,13 +78,13 @@ void bt_app_task_handler(void *arg){
     bt_app_msg_t msg;
     for (;;) {
         if (pdTRUE == xQueueReceive(s_bt_app_task_queue, &msg, (portTickType)portMAX_DELAY)) {
-            log_i("sig 0x%x, 0x%x", msg.sig, msg.event);
+            if(logi) log_i("sig 0x%x, 0x%x", msg.sig, msg.event);
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
                 bt_app_work_dispatched(&msg);
                 break;
             default:
-                log_i("unhandled sig: %d",msg.sig);
+                if(logi) log_i("unhandled sig: %d",msg.sig);
                 break;
             } // switch (msg.sig)
 
@@ -190,33 +192,31 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
     uint8_t *eir = NULL;
     esp_bt_gap_dev_prop_t *p;
 
-    log_i("Scanned device: %s", bda2str(param->disc_res.bda, bda_str, 18));
+    char* sd = bda2str(param->disc_res.bda, bda_str, 18);
     for (int i = 0; i < param->disc_res.num_prop; i++) {
         p = param->disc_res.prop + i;
         switch (p->type) {
         case ESP_BT_GAP_DEV_PROP_COD:
             cod = *(uint32_t *)(p->val);
-            log_i("--Class of Device: 0x%x", cod);
             // NB enumeration is listed in
             break;
         case ESP_BT_GAP_DEV_PROP_RSSI:
             rssi = *(int8_t *)(p->val);
-            log_i("Received signal strength indication: %d", rssi);
             break;
         case ESP_BT_GAP_DEV_PROP_EIR:
             eir = (uint8_t *)(p->val);
-            log_i("eir %i", eir);
             break;
         case ESP_BT_GAP_DEV_PROP_BDNAME:
         default:
             break;
         }
     }
+    if(logi) log_i("Scanned device: %s  --Class of Device: 0x%x, --RSSI %d, --eir %d", sd, cod, rssi, eir);
 
     /* search for device with MAJOR service class as "rendering" in COD */
     if (!esp_bt_gap_is_valid_cod(cod) ||
             !(esp_bt_gap_get_cod_srvc(cod) & ESP_BT_COD_SRVC_RENDERING)) {
-        log_i("cod is not valid");
+        log_e("cod is not valid");
         return;
     }
 
@@ -230,7 +230,7 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
         log_i("Found a target device, address %s, name %s", bda_str, s_peer_bdname);
         s_a2d_state = APP_AV_STATE_DISCOVERED;
         memcpy(s_peer_bda, param->disc_res.bda, ESP_BD_ADDR_LEN);
-        log_i("Cancel device discovery ...\n");
+        if(logi) log_i("Cancel device discovery ...\n");
         esp_bt_gap_cancel_discovery();
     }
 }
@@ -245,15 +245,15 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
         if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
             if (s_a2d_state == APP_AV_STATE_DISCOVERED) {
                 s_a2d_state = APP_AV_STATE_CONNECTING;
-                log_i("Device discovery stopped: a2dp connecting to peer: %s", s_peer_bdname);
+                if(logi) log_i("Device discovery stopped: a2dp connecting to peer: %s", s_peer_bdname);
                 esp_a2d_source_connect(s_peer_bda);
             } else {
                 // not discovered, continue to discover
-                log_i("Device discovery failed, continue to discover...");
+                if(logi) log_i("Device discovery failed, continue to discover...");
                 esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
             }
         } else if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) {
-            log_i("Discovery started.");
+            if(logi) log_i("Discovery started.");
         }
         break;
     }
@@ -264,14 +264,14 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
         if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS) {
             log_i("authentication success: %s", param->auth_cmpl.device_name);
         } else {
-            log_i("authentication failed, status:%d", param->auth_cmpl.stat);
+            log_e("authentication failed, status:%d", param->auth_cmpl.stat);
         }
         break;
     }
     case ESP_BT_GAP_PIN_REQ_EVT: {
-        log_i("ESP_BT_GAP_PIN_REQ_EVT min_16_digit:%d", param->pin_req.min_16_digit);
+        if(logi) log_i("ESP_BT_GAP_PIN_REQ_EVT min_16_digit:%d", param->pin_req.min_16_digit);
         if (param->pin_req.min_16_digit) {
-            log_i("Input pin code: 0000 0000 0000 0000");
+            if(logi) log_i("Input pin code: 0000 0000 0000 0000");
             esp_bt_pin_code_t pin_code = {0};
             esp_bt_gap_pin_reply(param->pin_req.bda, true, 16, pin_code);
         } else {
@@ -282,14 +282,14 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
 //            pin_code[2] = '3';
 //            pin_code[3] = '4';
 //            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
-            log_i("Input pin code: %s", s_pin_code);
+            if(logi) log_i("Input pin code: %s", s_pin_code);
             esp_bt_gap_pin_reply(param->pin_req.bda, true, s_pin_code_length, s_pin_code);
         }
         break;
     }
 
     default: {
-        log_i("event: %d", event);
+        log_e("unhandled event: %d", event);
         break;
     }
     }
@@ -297,7 +297,7 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
-    log_d("event %d",event);
+    if(logi) log_i("event %d",event);
     switch (event) {
     case BT_APP_EVT_STACK_UP: {
         /* set up device name */
@@ -316,14 +316,14 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
         esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
 
         /* start device discovery */
-        log_i("Starting device discovery...");
+        if(logi) log_i("Starting device discovery...");
         s_a2d_state = APP_AV_STATE_DISCOVERING;
         esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
 
         /* create and start heart beat timer */
         do {
             int tmr_id = 0;
-            s_tmr = xTimerCreate("connTmr", (10000 / portTICK_RATE_MS),
+            s_tmr = xTimerCreate("connTmr", (1000 / portTICK_RATE_MS),
                                pdTRUE, (void *)tmr_id, a2d_app_heart_beat);
             xTimerStart(s_tmr, portMAX_DELAY);
         } while (0);
@@ -346,25 +346,25 @@ void a2d_app_heart_beat(void *arg){
 void bt_app_av_sm_hdlr(uint16_t event, void *param){
     switch (s_a2d_state) {
     case APP_AV_STATE_DISCOVERING:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERING",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERING",s_a2d_state, event);
         break;
     case APP_AV_STATE_DISCOVERED:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERED",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_DISCOVERED",s_a2d_state, event);
         break;
     case APP_AV_STATE_UNCONNECTED:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_UNCONNECTED",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_UNCONNECTED",s_a2d_state, event);
         bt_app_av_state_unconnected(event, param);
         break;
     case APP_AV_STATE_CONNECTING:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTING",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTING",s_a2d_state, event);
         bt_app_av_state_connecting(event, param);
         break;
     case APP_AV_STATE_CONNECTED:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTED",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_CONNECTED",s_a2d_state, event);
         bt_app_av_state_connected(event, param);
         break;
     case APP_AV_STATE_DISCONNECTING:
-        log_i("state %d, evt 0x%x: APP_AV_STATE_DISCONNECTING",s_a2d_state, event);
+        if(logi) log_i("state %d, evt 0x%x: APP_AV_STATE_DISCONNECTING",s_a2d_state, event);
         bt_app_av_state_disconnecting(event, param);
         break;
     default:
@@ -396,6 +396,7 @@ void bt_app_av_state_unconnected(uint16_t event, void *param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_state_connecting(uint16_t event, void *param){
+    if(logi) log_i("event %i", event);
     esp_a2d_cb_param_t *a2d = NULL;
     switch (event) {
     case ESP_A2D_CONNECTION_STATE_EVT: {
@@ -415,10 +416,16 @@ void bt_app_av_state_connecting(uint16_t event, void *param){
     case ESP_A2D_MEDIA_CTRL_ACK_EVT:
         break;
     case BT_APP_HEART_BEAT_EVT:
-        if (++s_connecting_intv >= 2) {
-            s_a2d_state = APP_AV_STATE_UNCONNECTED;
-            s_connecting_intv = 0;
-        }
+        a2d = (esp_a2d_cb_param_t *)(param);
+        if(a2d) if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED)  log_i("a2dp connected");
+
+        s_a2d_state =  APP_AV_STATE_CONNECTED;
+        s_media_state = APP_AV_MEDIA_STATE_IDLE;
+        esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_NONE);
+//        if (++s_connecting_intv >= 2) {
+//            s_a2d_state = APP_AV_STATE_UNCONNECTED;
+//            s_connecting_intv = 0;
+//        }
         break;
     default:
         log_e("unhandled evt %d\n", event);
@@ -454,7 +461,7 @@ void bt_app_av_media_proc(uint16_t event, void *param){
                     s_media_state = APP_AV_MEDIA_STATE_STARTED;
                 } else {
                     // not started succesfully, transfer to idle state
-                    log_i("a2dp media start failed.\n");
+                    log_e("a2dp media start failed.\n");
                     s_media_state = APP_AV_MEDIA_STATE_IDLE;
                 }
             }
@@ -491,7 +498,7 @@ void bt_app_av_media_proc(uint16_t event, void *param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_state_connected(uint16_t event, void *param){
-    log_i("Event called: %d",event);
+    if(logi) log_i("Event called: %d",event);
     esp_a2d_cb_param_t *a2d = NULL;
     switch (event) {
         case ESP_A2D_CONNECTION_STATE_EVT: {
@@ -501,7 +508,7 @@ void bt_app_av_state_connected(uint16_t event, void *param){
                 s_a2d_state = APP_AV_STATE_UNCONNECTED;
 
                 // force a disconnect
-                esp_a2d_source_disconnect(s_peer_bda);
+//                esp_a2d_source_disconnect(s_peer_bda);
 
                 esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
             }
@@ -580,7 +587,7 @@ bool a2dp_source_init(String deviceName, String pinCode){
     res = esp_bluedroid_enable(); // activate bluedroid
     if(res != ESP_OK){log_e("enable bluedroid failed"); return false;}
 
-//    perform_wipe_security_db(); // delete pair devices
+    perform_wipe_security_db(); // delete pair devices
     bt_app_task_start_up(); // create application task
     /* Bluetooth device name, connection mode and profile set up */
     bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0, NULL);

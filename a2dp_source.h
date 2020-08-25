@@ -10,19 +10,15 @@
 
 #include "Arduino.h"
 
-extern "C"{
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
 #include "esp_gap_bt_api.h"
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
-};
-
 
 #define BT_APP_HEART_BEAT_EVT             (0xff00)
 #define BT_APP_SIG_WORK_DISPATCH          (0x01)
-
 
 // event for handler "bt_av_hdl_stack_up
 enum {
@@ -48,13 +44,9 @@ enum {
     APP_AV_MEDIA_STATE_STOPPING,
 };
 
-
-
 typedef struct { // AVRC target notification event capability bit mask
     uint16_t bits;                                /*!< bit mask representation of PASSTHROUGH commands */
 } esp_avrc_rn_evt_cap_mask_t;
-
-
 
 typedef void (* bt_app_cb_t) (uint16_t event, void *param);
 
