@@ -29,8 +29,8 @@
 #define RX_I2S_BCLK   12
 #define RX_I2S_LRC    14
 
-char BT_SINK_NAME[]   = "Manhattan-165327"; // sink devicename
-//char BT_SINK_NAME[]   = "ESP32-SPEAKER"; // sink devicename
+//char BT_SINK_NAME[]   = "Manhattan-165327"; // sink devicename
+char BT_SINK_NAME[]   = "ESP32-SPEAKER"; // sink devicename
 char BT_SINK_PIN[]    = "1234";             // sink pincode
 char BT_DEVICE_NAME[] = "ESP_A2DP_SRC";     // source devicename
 
