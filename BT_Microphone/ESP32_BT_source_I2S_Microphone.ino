@@ -29,8 +29,7 @@
 #define RX_I2S_BCLK   12
 #define RX_I2S_LRC    14
 
-//char BT_SINK_NAME[]   = "Manhattan-165327"; // sink devicename
-char BT_SINK_NAME[]   = "ESP32-SPEAKER"; // sink devicename
+char BT_SINK_NAME[]   = "Manhattan-165327"; // set your sink devicename here
 char BT_SINK_PIN[]    = "1234";             // sink pincode
 char BT_DEVICE_NAME[] = "ESP_A2DP_SRC";     // source devicename
 
@@ -88,12 +87,8 @@ void loop() {
 //  char *buf_ptr_read1  = readBuff1 + 4; // connect L/R with ground
     char *buf_ptr_read1  = readBuff1;     // connect L/R with VDD
     char *buf_ptr_write1 = readBuff1;
-//  char *buf_ptr_read2  = readBuff2 + 4; // connect L/R with ground
-    char *buf_ptr_read2  = readBuff2;     // connect L/R with VDD
-    char *buf_ptr_write2 = readBuff2;
 
     if(buffNr == BUFF_ONE) {
-//        log_i("BUFF_ONE");
         size_t bytes_read = 0;
         while(bytes_read == 0) {
             i2s_read(I2S_PORT_RX, readBuff1, buf_len, &bytes_read, portMAX_DELAY);
@@ -120,36 +115,6 @@ void loop() {
         }
         buffNr = BUFF_NONE;
     }
-
-    if(buffNr == BUFF_TWO) {
-//        log_i("BUFF_TWO");
-        size_t bytes_read = 0;
-        while(bytes_read == 0) {
-            i2s_read(I2S_PORT_RX, readBuff2, buf_len, &bytes_read, portMAX_DELAY);
-        }
-
-        uint32_t samples_read = bytes_read / 2 / (I2S_BITS_PER_SAMPLE_32BIT / 8);
-
-        //  convert 2x 32 bit stereo -> 1 x 16 bit mono
-        for(int i = 0; i < samples_read; i++) {
-
-            // left channel
-            int32_t sample = (buf_ptr_read2[3] << 24) + (buf_ptr_read2[2] << 16) + (buf_ptr_read2[1] << 8) + buf_ptr_read2[4];
-            sample = sample >> gain;
-            buf_ptr_write2[0] = sample & 0x00FF;
-            buf_ptr_write2[1] = (sample >>8) & 0x00FF;
-
-            // right channel
-            buf_ptr_write2[2] = buf_ptr_write2[0]; // mid
-            buf_ptr_write2[3] = buf_ptr_write2[1]; // high
-
-            buf_ptr_write2 += 2 * (I2S_BITS_PER_SAMPLE_16BIT / 8);
-            buf_ptr_read2 += 2 * (I2S_BITS_PER_SAMPLE_32BIT / 8);
-
-            buff2Size = samples_read * 2 * (I2S_BITS_PER_SAMPLE_16BIT / 8);
-        }
-        buffNr = BUFF_NONE;
-    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len) // BT data event
@@ -158,24 +123,11 @@ int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len) // BT data event
     if (len < 0 || data == NULL) {
         return 0;
     }
-    if(bnr==1){
-        if(!buff1Size) return 0;
-//        log_i("buff1Size %i", buff1Size);
-        memcpy(data, readBuff1, buff1Size);
-        bnr=2;
-        buffNr = BUFF_TWO;
-        return buff1Size;
-    }
-
-    if(bnr==2){
-        if(!buff2Size) return 0;
-//        log_i("buff2Size %i", buff2Size);
-        memcpy(data, readBuff2, buff2Size);
-        bnr=1;
-        buffNr = BUFF_ONE;
-        return buff2Size;
-    }
-    return 0;
+    if(!buff1Size) return 0;
+    memcpy(data, readBuff1, buff1Size);
+    bnr=2;
+    buffNr = BUFF_ONE;
+    return buff1Size;
 }
 
 
