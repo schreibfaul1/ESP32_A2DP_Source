@@ -97,7 +97,7 @@ void loop() {
         for(int i = 0; i < samples_read; i++) {
 
             // left channel
-            int32_t sample = (buf_ptr_read1[3] << 24) + (buf_ptr_read1[2] << 16) + (buf_ptr_read1[1] << 8) + buf_ptr_read1[4];
+            int32_t sample = (buf_ptr_read1[3] << 24) + (buf_ptr_read1[2] << 16) + (buf_ptr_read1[1] << 8);
             sample = sample >> gain;
             buf_ptr_write1[0] = sample & 0x00FF;
             buf_ptr_write1[1] = (sample >>8) & 0x00FF;
