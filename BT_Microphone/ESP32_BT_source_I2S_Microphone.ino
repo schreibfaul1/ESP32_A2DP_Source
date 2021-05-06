@@ -33,18 +33,16 @@ char BT_SINK_NAME[]   = "Manhattan-165327"; // set your sink devicename here
 char BT_SINK_PIN[]    = "1234";             // sink pincode
 char BT_DEVICE_NAME[] = "ESP_A2DP_SRC";     // source devicename
 
-const i2s_port_t I2S_PORT_RX = I2S_NUM_1;
+const i2s_port_t I2S_PORT_RX = I2S_NUM_0;
 const uint32_t   sample_rate = 44100;
 const uint16_t   buf_len     = 1024;
 size_t bytes_written = 0;
-char readBuff1[buf_len];
-uint16_t buff1Size;
-char readBuff2[buf_len];
-uint16_t buff2Size;
-uint8_t buffNr;
+char readBuff[buf_len];
+uint16_t buffSize;
+uint8_t buffStat;
 uint8_t gain = 14;   // reduce volume -> increase gain
 
-enum : uint8_t {BUFF_NONE, BUFF_ONE, BUFF_TWO};
+enum : uint8_t {BUFF_FULL, BUFF_EMPTY};
 
 //---------------------------------------------------------------------------------------------------------------------
 void i2s_install(){
@@ -76,7 +74,7 @@ void i2s_install(){
 //---------------------------------------------------------------------------------------------------------------------
 void setup(){
     i2s_install();
-    buffNr = BUFF_ONE;
+    buffStat = BUFF_EMPTY;
     log_i("free heap %i", esp_get_free_heap_size());
     a2dp_source_init(BT_SINK_NAME, BT_SINK_PIN);
     log_i("free heap %i", esp_get_free_heap_size());
@@ -84,14 +82,14 @@ void setup(){
 //---------------------------------------------------------------------------------------------------------------------
 void loop() {
 
-//  char *buf_ptr_read1  = readBuff1 + 4; // connect L/R with ground
-    char *buf_ptr_read1  = readBuff1;     // connect L/R with VDD
-    char *buf_ptr_write1 = readBuff1;
+//  char *buf_ptr_read1  = readBuff + 4; // connect L/R with ground
+    char *buf_ptr_read1  = readBuff;     // connect L/R with VDD
+    char *buf_ptr_write1 = readBuff;
 
-    if(buffNr == BUFF_ONE) {
+    if(buffStat == BUFF_EMPTY) {
         size_t bytes_read = 0;
         while(bytes_read == 0) {
-            i2s_read(I2S_PORT_RX, readBuff1, buf_len, &bytes_read, portMAX_DELAY);
+            i2s_read(I2S_PORT_RX, readBuff, buf_len, &bytes_read, portMAX_DELAY);
         }
         uint32_t samples_read = bytes_read / 2 / (I2S_BITS_PER_SAMPLE_32BIT / 8);
 
@@ -111,9 +109,9 @@ void loop() {
             buf_ptr_write1 += 2 * (I2S_BITS_PER_SAMPLE_16BIT / 8);
             buf_ptr_read1 += 2 * (I2S_BITS_PER_SAMPLE_32BIT / 8);
 
-            buff1Size = samples_read * 2 * (I2S_BITS_PER_SAMPLE_16BIT / 8);
+            buffSize = samples_read * 2 * (I2S_BITS_PER_SAMPLE_16BIT / 8);
         }
-        buffNr = BUFF_NONE;
+        buffStat = BUFF_FULL;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -123,11 +121,11 @@ int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len) // BT data event
     if (len < 0 || data == NULL) {
         return 0;
     }
-    if(!buff1Size) return 0;
-    memcpy(data, readBuff1, buff1Size);
+    if(!buffSize) return 0;
+    memcpy(data, readBuff, buffSize);
     bnr=2;
-    buffNr = BUFF_ONE;
-    return buff1Size;
+    buffStat = BUFF_EMPTY;
+    return buffSize;
 }
 
 
