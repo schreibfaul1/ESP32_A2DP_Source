@@ -3,11 +3,16 @@
  *
  *  Created on: 27.08.2020
  *      Author: wolle
+ *
+ *  updated on: 07.05.2020
+ *
  */
 
 #include <Arduino.h>
 #include "a2dp_source.h"
-#include "esp_bt_device.h"
+
+// #define ArduinoVers_2 /* uncomment this if vers >= 2.0.0, events run on core 1, Arduino runs on core 1 */
+
 
 extern String BT_DEVICE_NAME;
 
@@ -19,7 +24,7 @@ static int               s_a2d_state          = APP_AV_STATE_IDLE;
 static int               s_media_state        = APP_AV_MEDIA_STATE_IDLE;
 static String            s_BT_sink_name       = "";
 static esp_bt_pin_code_t s_pin_code           = "";
-//static int               s_pin_code_length    = 0;
+static int               s_pin_code_length    = 0;
 static TimerHandle_t     s_tmr;
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -205,7 +210,8 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
             break;
         }
     }
-    log_i("Scanned device: %s  --Class of Device: 0x%x, --RSSI %d, --eir %d", sd, cod, rssi, eir);
+    if (eir) get_name_from_eir(eir, s_peer_bdname, NULL); else s_peer_bdname[0] = 0;
+    log_i("Scanned device: %s  --Class of Device: 0x%x, --RSSI %d, --%s", sd, cod, rssi, s_peer_bdname);
 
     /* search for device with MAJOR service class as "rendering" in COD */
     if (!esp_bt_gap_is_valid_cod(cod) ||
@@ -218,6 +224,7 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
     if (eir) {
         get_name_from_eir(eir, s_peer_bdname, NULL);
         if (strcmp((char *)s_peer_bdname,  s_BT_sink_name.c_str()) != 0) {
+            log_i("s_peer_bdname %s, s_BT_sink_name %s", s_peer_bdname, s_BT_sink_name.c_str());
             return;
         }
 
@@ -276,8 +283,8 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
 //            pin_code[2] = '3';
 //            pin_code[3] = '4';
 //            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
-//            log_i("Input pin code: %s", s_pin_code);
-//            esp_bt_gap_pin_reply(param->pin_req.bda, true, s_pin_code_length, s_pin_code);
+            log_i("Input pin code: %s", s_pin_code);
+            esp_bt_gap_pin_reply(param->pin_req.bda, true, s_pin_code_length, s_pin_code);
         }
         break;
     }
@@ -307,8 +314,11 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
         esp_a2d_source_init();
 
         /* set discoverable and connectable mode */
+#ifdef ArduinoVers_2
+        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+#else
         esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
-
+#endif
         /* start device discovery */
         log_d("Starting device discovery...");
         s_a2d_state = APP_AV_STATE_DISCOVERING;
@@ -370,8 +380,12 @@ void bt_app_av_sm_hdlr(uint16_t event, void *param){
 void bt_app_av_state_unconnected(uint16_t event, void *param){
     switch (event) {
     case ESP_A2D_CONNECTION_STATE_EVT:
+        break;
     case ESP_A2D_AUDIO_STATE_EVT:
+        break;
     case ESP_A2D_AUDIO_CFG_EVT:
+        log_d("ESP_A2D_AUDIO_CFG_EVT");
+        break;
     case ESP_A2D_MEDIA_CTRL_ACK_EVT:
         break;
     case BT_APP_HEART_BEAT_EVT: {
@@ -399,15 +413,27 @@ void bt_app_av_state_connecting(uint16_t event, void *param){
             log_i("a2dp connected");
             s_a2d_state =  APP_AV_STATE_CONNECTED;
             s_media_state = APP_AV_MEDIA_STATE_IDLE;
+#ifdef ArduinoVers_2
+            esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+#else
             esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_NONE);
+#endif
         } else if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
             s_a2d_state =  APP_AV_STATE_UNCONNECTED;
+            log_i("a2dp unconnected");
+        } else if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTING) {
+            log_i("ESP_A2D_CONNECTION_STATE_CONNECTING");
         }
         break;
     }
     case ESP_A2D_AUDIO_STATE_EVT:
+        log_d("ESP_A2D_AUDIO_STATE_EVT");
+        break;
     case ESP_A2D_AUDIO_CFG_EVT:
+        log_d("ESP_A2D_AUDIO_CFG_EVT");
+        break;
     case ESP_A2D_MEDIA_CTRL_ACK_EVT:
+        log_d("ESP_A2D_MEDIA_CTRL_ACK_EVT");
         break;
     case BT_APP_HEART_BEAT_EVT:
         a2d = (esp_a2d_cb_param_t *)(param);
@@ -415,7 +441,11 @@ void bt_app_av_state_connecting(uint16_t event, void *param){
 
         s_a2d_state =  APP_AV_STATE_CONNECTED;
         s_media_state = APP_AV_MEDIA_STATE_IDLE;
+#ifdef ArduinoVers_2
+        esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+#else
         esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_NONE);
+#endif
 //        if (++s_connecting_intv >= 2) {
 //            s_a2d_state = APP_AV_STATE_UNCONNECTED;
 //            s_connecting_intv = 0;
@@ -429,13 +459,13 @@ void bt_app_av_state_connecting(uint16_t event, void *param){
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_media_proc(uint16_t event, void *param){
     esp_a2d_cb_param_t *a2d = NULL;
+    a2d = (esp_a2d_cb_param_t *)(param);
     switch (s_media_state) {
         case APP_AV_MEDIA_STATE_IDLE: {
             if (event == BT_APP_HEART_BEAT_EVT) {
                 log_i("a2dp media ready checking ...");
                 esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
             } else if (event == ESP_A2D_MEDIA_CTRL_ACK_EVT) {
-                a2d = (esp_a2d_cb_param_t *)(param);
                 if (a2d->media_ctrl_stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY &&
                         a2d->media_ctrl_stat.status == ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
                     log_i("a2dp media ready, starting ...");
@@ -500,7 +530,11 @@ void bt_app_av_state_connected(uint16_t event, void *param){
             if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
                 log_i("a2dp disconnected");
                 s_a2d_state = APP_AV_STATE_UNCONNECTED;
+#ifdef ArduinoVers_2
+                esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+#else
                 esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+#endif
             }
             break;
         }
@@ -512,6 +546,7 @@ void bt_app_av_state_connected(uint16_t event, void *param){
             break;
         }
         case ESP_A2D_AUDIO_CFG_EVT:
+            log_d("ESP_A2D_AUDIO_CFG_EVT");
             // not suppposed to occur for A2DP source
             break;
         case ESP_A2D_MEDIA_CTRL_ACK_EVT:
@@ -533,7 +568,11 @@ void bt_app_av_state_disconnecting(uint16_t event, void *param){
         if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
             log_i("a2dp disconnected");
             s_a2d_state =  APP_AV_STATE_UNCONNECTED;
+#ifdef ArduinoVers_2
+            esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+#else
             esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+#endif
         }
         break;
     }

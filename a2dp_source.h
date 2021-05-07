@@ -43,10 +43,10 @@ enum {
     APP_AV_MEDIA_STATE_STARTED,
     APP_AV_MEDIA_STATE_STOPPING,
 };
-
-typedef struct { // AVRC target notification event capability bit mask
-    uint16_t bits;                                /*!< bit mask representation of PASSTHROUGH commands */
-} esp_avrc_rn_evt_cap_mask_t;
+//
+//typedef struct { // AVRC target notification event capability bit mask
+//    uint16_t bits;                                /*!< bit mask representation of PASSTHROUGH commands */
+//} esp_avrc_rn_evt_cap_mask_t;
 
 typedef void (* bt_app_cb_t) (uint16_t event, void *param);
 
