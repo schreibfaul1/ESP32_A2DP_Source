@@ -7,5 +7,5 @@ BT Musicplayer
 ![Breadboard](https://github.com/schreibfaul1/ESP32-A2DP-Source/blob/master/a2dp.jpg)
 
 BT Microphone
-![bt_microphone](https://github.com/schreibfaul1/ESP32-A2DP-Source/blob/master/BT_Microphone/bt_microphone.jpg)
+![bt_microphone](https://github.com/schreibfaul1/ESP32-A2DP-Source/blob/master/examples/BT_Microphone/bt_microphone.jpg)
 
