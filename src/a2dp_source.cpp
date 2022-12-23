@@ -4,15 +4,14 @@
  *  Created on: 27.08.2020
  *      Author: wolle
  *
- *  updated on: 07.05.2021
+ *  updated on: 23.12.2021
+ *
+ *  use Arduino Version >= 2.0.4
  *
  */
 
 #include <Arduino.h>
 #include "a2dp_source.h"
-
-// #define ArduinoVers_2 /* uncomment this if vers >= 2.0.0, events run on core 1, Arduino runs on core 1 */
-
 
 extern String BT_DEVICE_NAME;
 
@@ -314,11 +313,7 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
         esp_a2d_source_init();
 
         /* set discoverable and connectable mode */
-#ifdef ArduinoVers_2
-        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-#else
         esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
-#endif
         /* start device discovery */
         log_d("Starting device discovery...");
         s_a2d_state = APP_AV_STATE_DISCOVERING;
@@ -441,11 +436,7 @@ void bt_app_av_state_connecting(uint16_t event, void *param){
 
         s_a2d_state =  APP_AV_STATE_CONNECTED;
         s_media_state = APP_AV_MEDIA_STATE_IDLE;
-#ifdef ArduinoVers_2
-        esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-#else
         esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_NONE);
-#endif
 //        if (++s_connecting_intv >= 2) {
 //            s_a2d_state = APP_AV_STATE_UNCONNECTED;
 //            s_connecting_intv = 0;
@@ -530,11 +521,7 @@ void bt_app_av_state_connected(uint16_t event, void *param){
             if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
                 log_i("a2dp disconnected");
                 s_a2d_state = APP_AV_STATE_UNCONNECTED;
-#ifdef ArduinoVers_2
-                esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-#else
                 esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
-#endif
             }
             break;
         }
@@ -568,11 +555,7 @@ void bt_app_av_state_disconnecting(uint16_t event, void *param){
         if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
             log_i("a2dp disconnected");
             s_a2d_state =  APP_AV_STATE_UNCONNECTED;
-#ifdef ArduinoVers_2
-            esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-#else
             esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
-#endif
         }
         break;
     }
@@ -602,13 +585,9 @@ bool a2dp_source_init(String deviceName, String pinCode){
         res= esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     }while(res==0);
 
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT(); //controller init
 
-    res = esp_bt_controller_init(&bt_cfg);
-    if(res != ESP_OK){log_e("initialize controller failed %d", res); return false;}
-
-    res = esp_bt_controller_enable(ESP_BT_MODE_BTDM); // enable BT
-    if(res != ESP_OK){log_e("enable controller failed %d", res); return false;}
+    if(!btStart()) {log_e("Failed to initialize controller"); return false;}
+    else log_i("controller initialized");
 
     res = esp_bluedroid_init(); // init bluedroid
     if(res != ESP_OK){log_e("initialize bluedroid failed"); return false;}
