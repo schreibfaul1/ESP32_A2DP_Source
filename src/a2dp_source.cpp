@@ -28,37 +28,24 @@ static bool              m_bt_enabled        = false; // blue tooth app
 static bool              m_hb_enabled        = false; // heart beat
 
 //---------------------------------------------------------------------------------------------------------------------
-bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len){
+bool bt_app_work_dispatch(uint16_t event, void *p_params, int param_len){
 
     bt_app_msg_t msg;
     memset(&msg, 0, sizeof(bt_app_msg_t));
 
     msg.sig = BT_APP_SIG_WORK_DISPATCH;
     msg.event = event;
-    msg.cb = p_cback;
+    msg.cb = bt_app_av_sm_hdlr;
 
-    if (param_len == 0) {
-        return bt_app_send_msg(&msg);
-    } else if (p_params && param_len > 0) {
+    if(param_len == 0) {
+        if(xQueueSend(m_bt_msg_queue, (void*)&msg, 100 / portTICK_RATE_MS) == pdTRUE) return true;
+    }else if (p_params && param_len > 0) {
         if ((msg.param = malloc(param_len)) != NULL) {
             memcpy(msg.param, p_params, param_len);
-            return bt_app_send_msg(&msg);
+            if(xQueueSend(m_bt_msg_queue, (void*)&msg, 100 / portTICK_RATE_MS) == pdTRUE) return true;
         }
     }
-
     return false;
-}
-//---------------------------------------------------------------------------------------------------------------------
-bool bt_app_send_msg(bt_app_msg_t *msg){
-    if (msg == NULL) {
-        return false;
-    }
-
-    if (xQueueSend(m_bt_msg_queue, msg, 100 / portTICK_RATE_MS) != pdTRUE) {
-        log_e("xQueue send failed");
-        return false;
-    }
-    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_loop(){
@@ -69,20 +56,24 @@ void bt_loop(){
         if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)0)) {
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
-                if (msg.cb) {msg.cb(msg.event, msg.param);}
+                if (msg.cb) {
+                    bt_app_av_sm_hdlr(msg.event, msg.param);
+                    if (msg.param) free(msg.param);
+                    return;
+                }
                 break;
             default:
                 log_e("unhandled sig: %d",msg.sig);
+                if (msg.param) {free(msg.param);}
                 break;
             } // switch (msg.sig)
-            if (msg.param) {free(msg.param);}
             return;
         }
-        if(m_hb_enabled){
+        else if(m_hb_enabled){
             if(timer < millis()){
                 timer = millis() + 1000;
                 log_v("heart beat");
-                bt_app_work_dispatch(bt_app_av_sm_hdlr, BT_APP_HEART_BEAT_EVT, NULL, 0);
+                bt_app_work_dispatch(BT_APP_HEART_BEAT_EVT, NULL, 0);
             }
         }
     }
@@ -312,7 +303,7 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param){
-    bt_app_work_dispatch(bt_app_av_sm_hdlr, event, param, sizeof(esp_a2d_cb_param_t));
+    bt_app_work_dispatch(event, param, sizeof(esp_a2d_cb_param_t));
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_sm_hdlr(uint16_t event, void *param){

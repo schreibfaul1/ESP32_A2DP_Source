@@ -51,10 +51,6 @@ enum {
     APP_AV_MEDIA_STATE_STARTED,
     APP_AV_MEDIA_STATE_STOPPING,
 };
-//
-//typedef struct { // AVRC target notification event capability bit mask
-//    uint16_t bits;                                /*!< bit mask representation of PASSTHROUGH commands */
-//} esp_avrc_rn_evt_cap_mask_t;
 
 typedef void (* bt_app_cb_t) (uint16_t event, void *param);
 
@@ -69,8 +65,7 @@ typedef struct {
 typedef void (* bt_app_copy_cb_t) (bt_app_msg_t *msg, void *p_dest, void *p_src);
 
 
-bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len);
-bool bt_app_send_msg(bt_app_msg_t *msg);
+bool bt_app_work_dispatch(uint16_t event, void *p_params, int param_len);
 void a2dp_source_stop(void);
 char *bda2str(esp_bd_addr_t bda, char *str, size_t size);
 void perform_wipe_security_db(void);
