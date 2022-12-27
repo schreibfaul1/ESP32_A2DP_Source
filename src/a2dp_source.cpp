@@ -15,7 +15,6 @@
 
 extern String BT_DEVICE_NAME;
 
-static xQueueHandle      m_bt_msg_queue  = NULL;
 static esp_bd_addr_t     s_peer_bda           = {0};
 static uint8_t           s_peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
 static int               s_a2d_state          = APP_AV_STATE_IDLE;
@@ -26,23 +25,21 @@ static int               s_pin_code_length    = 0;
 static TimerHandle_t     s_tmr;
 static bool              m_bt_enabled        = false; // blue tooth app
 static bool              m_hb_enabled        = false; // heart beat
+static bt_app_msg_t      m_msg;
 
 //---------------------------------------------------------------------------------------------------------------------
 bool bt_app_work_dispatch(uint16_t event, void *p_params, int param_len){
 
-    bt_app_msg_t msg;
-    memset(&msg, 0, sizeof(bt_app_msg_t));
+    //bt_app_msg_t msg;
+    memset(&m_msg, 0, sizeof(bt_app_msg_t));
 
-    msg.sig = BT_APP_SIG_WORK_DISPATCH;
-    msg.event = event;
-    msg.cb = bt_app_av_sm_hdlr;
+    m_msg.sig = BT_APP_SIG_WORK_DISPATCH;
+    m_msg.event = event;
+    m_msg.cb = bt_app_av_sm_hdlr;
 
-    if(param_len == 0) {
-        if(xQueueSend(m_bt_msg_queue, (void*)&msg, 100 / portTICK_RATE_MS) == pdTRUE) return true;
-    }else if (p_params && param_len > 0) {
-        if ((msg.param = malloc(param_len)) != NULL) {
-            memcpy(msg.param, p_params, param_len);
-            if(xQueueSend(m_bt_msg_queue, (void*)&msg, 100 / portTICK_RATE_MS) == pdTRUE) return true;
+    if (p_params && param_len > 0) {
+        if ((m_msg.param = malloc(param_len)) != NULL) {
+            memcpy(m_msg.param, p_params, param_len);
         }
     }
     return false;
@@ -51,18 +48,18 @@ bool bt_app_work_dispatch(uint16_t event, void *p_params, int param_len){
 void bt_loop(){
     static uint32_t timer = 0;
     if(m_bt_enabled){
-        bt_app_msg_t msg;
-
-        if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)0)) {
-            switch (msg.sig) {
-            case BT_APP_SIG_WORK_DISPATCH:
-                bt_app_av_sm_hdlr(msg.event, msg.param);
-                break;
-            default:
-                log_e("unhandled sig: %d",msg.sig);
-                break;
-            } // switch (msg.sig)
-            if (msg.param) {free(msg.param);}
+        if(m_msg.sig > 0){
+            switch (m_msg.sig) {
+                case BT_APP_SIG_WORK_DISPATCH:
+                    vTaskDelay(10); // is absolutely necessary
+                    bt_app_av_sm_hdlr(m_msg.event, m_msg.param);
+                    break;
+                default:
+                    log_e("unhandled sig: %d",m_msg.sig);
+                    break;
+                } // switch (msg.sig)
+                if (m_msg.param) {free(m_msg.param);}
+                m_msg.sig = 0;
         }
         else if(m_hb_enabled){
             if(timer < millis()){
@@ -76,10 +73,6 @@ void bt_loop(){
 //---------------------------------------------------------------------------------------------------------------------
 void a2dp_source_stop(void){
     m_bt_enabled = false;
-    if (m_bt_msg_queue) {
-        vQueueDelete(m_bt_msg_queue);
-        m_bt_msg_queue = NULL;
-    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 char *bda2str(esp_bd_addr_t bda, char *str, size_t size){
@@ -524,7 +517,6 @@ bool a2dp_source_init(String deviceName, String pinCode){
     if(res != ESP_OK){log_e("enable bluedroid failed"); return false;}
 
     perform_wipe_security_db(); // delete pair devices
-    m_bt_msg_queue = xQueueCreate(20, sizeof(bt_app_msg_t));
     m_bt_enabled = true;
 
     /* Bluetooth device name, connection mode and profile set up */
