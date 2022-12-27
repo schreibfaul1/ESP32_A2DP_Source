@@ -4,7 +4,7 @@
  *  Created on: 27.08.2020
  *      Author: wolle
  *
- *  updated on: 23.12.2021
+ *  updated on: 27.12.2021
  *
  *  use Arduino Version >= 2.0.4
  *
@@ -25,11 +25,11 @@ static String            s_BT_sink_name       = "";
 static esp_bt_pin_code_t s_pin_code           = "";
 static int               s_pin_code_length    = 0;
 static TimerHandle_t     s_tmr;
+static bool              m_taskEnabled = false;
 
 //---------------------------------------------------------------------------------------------------------------------
-bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback)
-{
-    log_d("event 0x%x, param len %d", event, param_len);
+bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len,
+                          bt_app_copy_cb_t p_copy_cback){
 
     bt_app_msg_t msg;
     memset(&msg, 0, sizeof(bt_app_msg_t));
@@ -72,11 +72,10 @@ void bt_app_work_dispatched(bt_app_msg_t *msg){
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void bt_app_task_handler(void *arg){
-    bt_app_msg_t msg;
-    for (;;) {
+void bt_loop(){
+    if(m_taskEnabled){
+        bt_app_msg_t msg;
         if (pdTRUE == xQueueReceive(s_bt_app_task_queue, &msg, (portTickType)portMAX_DELAY)) {
-            log_d("sig 0x%x, 0x%x", msg.sig, msg.event);
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
                 bt_app_work_dispatched(&msg);
@@ -86,34 +85,39 @@ void bt_app_task_handler(void *arg){
                 break;
             } // switch (msg.sig)
 
-            if (msg.param) {
-                free(msg.param);
-            }
+            if (msg.param) {free(msg.param);}
         }
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void bt_app_task_start_up(void)
-{
+void bt_app_task_start_up(void){
     s_bt_app_task_queue = xQueueCreate(20, sizeof(bt_app_msg_t));
-    xTaskCreate(bt_app_task_handler, "BtAppT", 2048, NULL, configMAX_PRIORITIES - 3, &s_bt_app_task_handle);
+            // xTaskCreatePinnedToCore(
+                // bt_app_task_handler,
+                // "BtAppT",
+                // 2048,
+                // NULL,
+                // configMAX_PRIORITIES - 20,
+                // &s_bt_app_task_handle,
+                // 1);
+    m_taskEnabled = true;
     return;
 }
+
 //---------------------------------------------------------------------------------------------------------------------
-void bt_app_task_shut_down(void)
-{
-    if (s_bt_app_task_handle) {
-        vTaskDelete(s_bt_app_task_handle);
-        s_bt_app_task_handle = NULL;
-    }
+void bt_app_task_shut_down(void){
+    // if (s_bt_app_task_handle) {
+        // vTaskDelete(s_bt_app_task_handle);
+        // s_bt_app_task_handle = NULL;
+    // }
+    m_taskEnabled = false;
     if (s_bt_app_task_queue) {
         vQueueDelete(s_bt_app_task_queue);
         s_bt_app_task_queue = NULL;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-char *bda2str(esp_bd_addr_t bda, char *str, size_t size)
-{
+char *bda2str(esp_bd_addr_t bda, char *str, size_t size){
     if (bda == NULL || str == NULL || size < 18) {
         return NULL;
     }
@@ -399,7 +403,6 @@ void bt_app_av_state_unconnected(uint16_t event, void *param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_state_connecting(uint16_t event, void *param){
-    log_d("event %i", event);
     esp_a2d_cb_param_t *a2d = NULL;
     switch (event) {
     case ESP_A2D_CONNECTION_STATE_EVT: {
@@ -607,4 +610,14 @@ bool a2dp_source_init(String deviceName, String pinCode){
 
 
     return true;
+}
+//---------------------------------------------------------------------------------------------------------------------
+int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len){ // BT data event
+    uint32_t dataLength = 0;
+    uint32_t sampleRate = 0;
+    if(bt_data) dataLength = bt_data(data, len, &sampleRate);
+    static uint8_t i = 0;
+    if(sampleRate != 44100) log_e("SampleRate must be 44100");
+    // todo scale sampleRate
+    return dataLength;
 }

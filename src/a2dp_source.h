@@ -3,6 +3,11 @@
  *
  *  Created on: 23.08.2020
  *      Author: wolle
+ *
+ *  updated on: 27.12.2021
+ *
+ *  use Arduino Version >= 2.0.4
+ *
  */
 
 #ifndef A2DP_SOURCE_H_
@@ -19,6 +24,9 @@
 
 #define BT_APP_HEART_BEAT_EVT             (0xff00)
 #define BT_APP_SIG_WORK_DISPATCH          (0x01)
+
+//extern __attribute__((weak)) void    bt_info(const char*);
+extern __attribute__((weak)) int32_t bt_data(uint8_t *data, int32_t len, uint32_t* sampleRate);
 
 // event for handler "bt_av_hdl_stack_up
 enum {
@@ -64,7 +72,6 @@ typedef void (* bt_app_copy_cb_t) (bt_app_msg_t *msg, void *p_dest, void *p_src)
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback);
 bool bt_app_send_msg(bt_app_msg_t *msg);
 void bt_app_work_dispatched(bt_app_msg_t *msg);
-void bt_app_task_handler(void *arg);
 void bt_app_task_start_up(void);
 void bt_app_task_shut_down(void);
 char *bda2str(esp_bd_addr_t bda, char *str, size_t size);
@@ -84,4 +91,5 @@ void bt_app_av_state_connected(uint16_t event, void *param);
 void bt_app_av_state_disconnecting(uint16_t event, void *param);
 int get_APP_AV_STATE();
 bool a2dp_source_init(String deviceName, String pinCode);
+void bt_loop();
 #endif /* A2DP_SOURCE_H_ */
