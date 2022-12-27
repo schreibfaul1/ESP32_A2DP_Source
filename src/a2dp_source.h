@@ -72,7 +72,6 @@ void perform_wipe_security_db(void);
 bool get_name_from_eir(uint8_t *eir, uint8_t *bdname, uint8_t *bdname_len);
 void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param);
 void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
-void bt_av_hdl_stack_evt(uint16_t event, void *p_param);
 void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param);
 int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len);
 void bt_app_av_sm_hdlr(uint16_t event, void *param);

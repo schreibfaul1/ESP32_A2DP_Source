@@ -56,18 +56,13 @@ void bt_loop(){
         if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)0)) {
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
-                if (msg.cb) {
-                    bt_app_av_sm_hdlr(msg.event, msg.param);
-                    if (msg.param) free(msg.param);
-                    return;
-                }
+                bt_app_av_sm_hdlr(msg.event, msg.param);
                 break;
             default:
                 log_e("unhandled sig: %d",msg.sig);
-                if (msg.param) {free(msg.param);}
                 break;
             } // switch (msg.sig)
-            return;
+            if (msg.param) {free(msg.param);}
         }
         else if(m_hb_enabled){
             if(timer < millis()){
@@ -212,10 +207,12 @@ void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param){
 void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
     switch (event) {
     case ESP_BT_GAP_DISC_RES_EVT: {
+        if(s_media_state == APP_AV_MEDIA_STATE_STARTED) break; // no longer require discovery results
         filter_inquiry_scan_result(param);
         break;
     }
     case ESP_BT_GAP_DISC_STATE_CHANGED_EVT: {
+
         if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
             if (s_a2d_state == APP_AV_STATE_DISCOVERED) {
                 s_a2d_state = APP_AV_STATE_CONNECTING;
@@ -268,38 +265,6 @@ void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param){
     }
     }
     return;
-}
-//---------------------------------------------------------------------------------------------------------------------
-void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
-    log_d("event %d",event);
-    switch (event) {
-    case BT_APP_EVT_STACK_UP: {
-        /* set up device name */
-        esp_bt_dev_set_device_name(BT_DEVICE_NAME.c_str());
-
-        /* register GAP callback function */
-        esp_bt_gap_register_callback(bt_app_gap_cb);
-
-        /* initialize A2DP source */
-        esp_a2d_register_callback(&bt_app_a2d_cb);
-
-        esp_a2d_source_register_data_callback(bt_app_a2d_data_cb);
-        esp_a2d_source_init();
-
-        /* set discoverable and connectable mode */
-        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-        /* start device discovery */
-        log_d("Starting device discovery...");
-        s_a2d_state = APP_AV_STATE_DISCOVERING;
-        esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
-
-        m_hb_enabled = true;
-        break;
-    }
-    default:
-        log_e("unhandled evt %d", event);
-        break;
-    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param){
@@ -563,13 +528,20 @@ bool a2dp_source_init(String deviceName, String pinCode){
     m_bt_enabled = true;
 
     /* Bluetooth device name, connection mode and profile set up */
-    bt_av_hdl_stack_evt(BT_APP_EVT_STACK_UP, NULL);
+    esp_bt_dev_set_device_name(BT_DEVICE_NAME.c_str());                         /* set up device name */
+    esp_bt_gap_register_callback(bt_app_gap_cb);                                /* register GAP callback function */
+    esp_a2d_register_callback(&bt_app_a2d_cb);                                  /* initialize A2DP source */
+    esp_a2d_source_register_data_callback(bt_app_a2d_data_cb);
+    esp_a2d_source_init();
+    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);  /* set discoverable and connectable mode */
+    s_a2d_state = APP_AV_STATE_DISCOVERING;                                     /* start device discovery */
+    esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
+    m_hb_enabled = true;
 
     // Set default parameters for Legacy Pairing, use variable pin, input pin code when pairing
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
     esp_bt_pin_code_t pin_code;
     esp_bt_gap_set_pin(pin_type, 0, pin_code);
-
 
     return true;
 }
