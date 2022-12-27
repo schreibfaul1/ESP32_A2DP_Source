@@ -15,7 +15,7 @@
 
 extern String BT_DEVICE_NAME;
 
-static xQueueHandle      s_bt_app_task_queue  = NULL;
+static xQueueHandle      m_bt_msg_queue  = NULL;
 static xTaskHandle       s_bt_app_task_handle = NULL;
 static esp_bd_addr_t     s_peer_bda           = {0};
 static uint8_t           s_peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
@@ -25,11 +25,10 @@ static String            s_BT_sink_name       = "";
 static esp_bt_pin_code_t s_pin_code           = "";
 static int               s_pin_code_length    = 0;
 static TimerHandle_t     s_tmr;
-static bool              m_taskEnabled = false;
+static bool              m_bt_enabled        = false;
 
 //---------------------------------------------------------------------------------------------------------------------
-bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len,
-                          bt_app_copy_cb_t p_copy_cback){
+bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len){
 
     bt_app_msg_t msg;
     memset(&msg, 0, sizeof(bt_app_msg_t));
@@ -43,10 +42,6 @@ bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, i
     } else if (p_params && param_len > 0) {
         if ((msg.param = malloc(param_len)) != NULL) {
             memcpy(msg.param, p_params, param_len);
-            /* check if caller has provided a copy callback to do the deep copy */
-            if (p_copy_cback) {
-                p_copy_cback(&msg, msg.param, p_params);
-            }
             return bt_app_send_msg(&msg);
         }
     }
@@ -59,61 +54,35 @@ bool bt_app_send_msg(bt_app_msg_t *msg){
         return false;
     }
 
-    if (xQueueSend(s_bt_app_task_queue, msg, 100 / portTICK_RATE_MS) != pdTRUE) {
+    if (xQueueSend(m_bt_msg_queue, msg, 100 / portTICK_RATE_MS) != pdTRUE) {
         log_e("xQueue send failed");
         return false;
     }
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void bt_app_work_dispatched(bt_app_msg_t *msg){
-    if (msg->cb) {
-        msg->cb(msg->event, msg->param);
-    }
-}
-//---------------------------------------------------------------------------------------------------------------------
 void bt_loop(){
-    if(m_taskEnabled){
+    if(m_bt_enabled){
         bt_app_msg_t msg;
-        if (pdTRUE == xQueueReceive(s_bt_app_task_queue, &msg, (portTickType)portMAX_DELAY)) {
+        if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)portMAX_DELAY)) {
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
-                bt_app_work_dispatched(&msg);
+                if (msg.cb) {msg.cb(msg.event, msg.param);}
                 break;
             default:
                 log_e("unhandled sig: %d",msg.sig);
                 break;
             } // switch (msg.sig)
-
             if (msg.param) {free(msg.param);}
         }
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void bt_app_task_start_up(void){
-    s_bt_app_task_queue = xQueueCreate(20, sizeof(bt_app_msg_t));
-            // xTaskCreatePinnedToCore(
-                // bt_app_task_handler,
-                // "BtAppT",
-                // 2048,
-                // NULL,
-                // configMAX_PRIORITIES - 20,
-                // &s_bt_app_task_handle,
-                // 1);
-    m_taskEnabled = true;
-    return;
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-void bt_app_task_shut_down(void){
-    // if (s_bt_app_task_handle) {
-        // vTaskDelete(s_bt_app_task_handle);
-        // s_bt_app_task_handle = NULL;
-    // }
-    m_taskEnabled = false;
-    if (s_bt_app_task_queue) {
-        vQueueDelete(s_bt_app_task_queue);
-        s_bt_app_task_queue = NULL;
+void a2dp_source_stop(void){
+    m_bt_enabled = false;
+    if (m_bt_msg_queue) {
+        vQueueDelete(m_bt_msg_queue);
+        m_bt_msg_queue = NULL;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -339,11 +308,11 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param){
-    bt_app_work_dispatch(bt_app_av_sm_hdlr, event, param, sizeof(esp_a2d_cb_param_t), NULL);
+    bt_app_work_dispatch(bt_app_av_sm_hdlr, event, param, sizeof(esp_a2d_cb_param_t));
 }
 //---------------------------------------------------------------------------------------------------------------------
 void a2d_app_heart_beat(void *arg){
-    bt_app_work_dispatch(bt_app_av_sm_hdlr, BT_APP_HEART_BEAT_EVT, NULL, 0, NULL);
+    bt_app_work_dispatch(bt_app_av_sm_hdlr, BT_APP_HEART_BEAT_EVT, NULL, 0);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_sm_hdlr(uint16_t event, void *param){
@@ -599,9 +568,10 @@ bool a2dp_source_init(String deviceName, String pinCode){
     if(res != ESP_OK){log_e("enable bluedroid failed"); return false;}
 
     perform_wipe_security_db(); // delete pair devices
-    bt_app_task_start_up(); // create application task
+    m_bt_msg_queue = xQueueCreate(20, sizeof(bt_app_msg_t));
+    m_bt_enabled = true;
     /* Bluetooth device name, connection mode and profile set up */
-    bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0, NULL);
+    bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0);
 
     // Set default parameters for Legacy Pairing, use variable pin, input pin code when pairing
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;

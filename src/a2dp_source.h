@@ -69,11 +69,9 @@ typedef struct {
 typedef void (* bt_app_copy_cb_t) (bt_app_msg_t *msg, void *p_dest, void *p_src);
 
 
-bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback);
+bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len);
 bool bt_app_send_msg(bt_app_msg_t *msg);
-void bt_app_work_dispatched(bt_app_msg_t *msg);
-void bt_app_task_start_up(void);
-void bt_app_task_shut_down(void);
+void a2dp_source_stop(void);
 char *bda2str(esp_bd_addr_t bda, char *str, size_t size);
 void perform_wipe_security_db(void);
 bool get_name_from_eir(uint8_t *eir, uint8_t *bdname, uint8_t *bdname_len);
