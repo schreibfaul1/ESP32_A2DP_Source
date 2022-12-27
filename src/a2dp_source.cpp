@@ -16,7 +16,6 @@
 extern String BT_DEVICE_NAME;
 
 static xQueueHandle      m_bt_msg_queue  = NULL;
-static xTaskHandle       s_bt_app_task_handle = NULL;
 static esp_bd_addr_t     s_peer_bda           = {0};
 static uint8_t           s_peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
 static int               s_a2d_state          = APP_AV_STATE_IDLE;
@@ -25,7 +24,8 @@ static String            s_BT_sink_name       = "";
 static esp_bt_pin_code_t s_pin_code           = "";
 static int               s_pin_code_length    = 0;
 static TimerHandle_t     s_tmr;
-static bool              m_bt_enabled        = false;
+static bool              m_bt_enabled        = false; // blue tooth app
+static bool              m_hb_enabled        = false; // heart beat
 
 //---------------------------------------------------------------------------------------------------------------------
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len){
@@ -62,9 +62,11 @@ bool bt_app_send_msg(bt_app_msg_t *msg){
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_loop(){
+    static uint32_t timer = 0;
     if(m_bt_enabled){
         bt_app_msg_t msg;
-        if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)portMAX_DELAY)) {
+
+        if (pdTRUE == xQueueReceive(m_bt_msg_queue, &msg, (portTickType)0)) {
             switch (msg.sig) {
             case BT_APP_SIG_WORK_DISPATCH:
                 if (msg.cb) {msg.cb(msg.event, msg.param);}
@@ -74,6 +76,14 @@ void bt_loop(){
                 break;
             } // switch (msg.sig)
             if (msg.param) {free(msg.param);}
+            return;
+        }
+        if(m_hb_enabled){
+            if(timer < millis()){
+                timer = millis() + 1000;
+                log_v("heart beat");
+                bt_app_work_dispatch(bt_app_av_sm_hdlr, BT_APP_HEART_BEAT_EVT, NULL, 0);
+            }
         }
     }
 }
@@ -292,13 +302,7 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
         s_a2d_state = APP_AV_STATE_DISCOVERING;
         esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
 
-        /* create and start heart beat timer */
-        do {
-            int tmr_id = 0;
-            s_tmr = xTimerCreate("connTmr", (1000 / portTICK_RATE_MS),
-                               pdTRUE, (void *)tmr_id, a2d_app_heart_beat);
-            xTimerStart(s_tmr, portMAX_DELAY);
-        } while (0);
+        m_hb_enabled = true;
         break;
     }
     default:
@@ -309,10 +313,6 @@ void bt_av_hdl_stack_evt(uint16_t event, void *p_param){
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param){
     bt_app_work_dispatch(bt_app_av_sm_hdlr, event, param, sizeof(esp_a2d_cb_param_t));
-}
-//---------------------------------------------------------------------------------------------------------------------
-void a2d_app_heart_beat(void *arg){
-    bt_app_work_dispatch(bt_app_av_sm_hdlr, BT_APP_HEART_BEAT_EVT, NULL, 0);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void bt_app_av_sm_hdlr(uint16_t event, void *param){
@@ -570,8 +570,9 @@ bool a2dp_source_init(String deviceName, String pinCode){
     perform_wipe_security_db(); // delete pair devices
     m_bt_msg_queue = xQueueCreate(20, sizeof(bt_app_msg_t));
     m_bt_enabled = true;
+
     /* Bluetooth device name, connection mode and profile set up */
-    bt_app_work_dispatch(bt_av_hdl_stack_evt, BT_APP_EVT_STACK_UP, NULL, 0);
+    bt_av_hdl_stack_evt(BT_APP_EVT_STACK_UP, NULL);
 
     // Set default parameters for Legacy Pairing, use variable pin, input pin code when pairing
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
