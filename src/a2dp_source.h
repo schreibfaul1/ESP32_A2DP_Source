@@ -4,7 +4,7 @@
  *  Created on: 23.08.2020
  *      Author: wolle
  *
- *  updated on: 27.12.2021
+ *  updated on: 28.12.2021
  *
  *  use Arduino Version >= 2.0.4
  *
@@ -25,8 +25,9 @@
 #define BT_APP_HEART_BEAT_EVT             (0xff00)
 #define BT_APP_SIG_WORK_DISPATCH          (0x01)
 
-//extern __attribute__((weak)) void    bt_info(const char*);
 extern __attribute__((weak)) int32_t bt_data(uint8_t *data, int32_t len, uint32_t* sampleRate);
+extern __attribute__((weak)) void bt_info(const char* info);
+#define BT_INFO(...) {char buff[512]; sprintf(buff,__VA_ARGS__); if(bt_info) bt_info(buff);}
 
 // event for handler "bt_av_hdl_stack_up
 enum {
@@ -35,21 +36,21 @@ enum {
 
 // A2DP global state
 enum {
-    APP_AV_STATE_IDLE,
-    APP_AV_STATE_DISCOVERING,
-    APP_AV_STATE_DISCOVERED,
-    APP_AV_STATE_UNCONNECTED,
-    APP_AV_STATE_CONNECTING,
-    APP_AV_STATE_CONNECTED,
-    APP_AV_STATE_DISCONNECTING,
+    APP_AV_STATE_IDLE = 0,
+    APP_AV_STATE_DISCOVERING = 1,
+    APP_AV_STATE_DISCOVERED = 2,
+    APP_AV_STATE_UNCONNECTED = 3,
+    APP_AV_STATE_CONNECTING = 4,
+    APP_AV_STATE_CONNECTED = 5,
+    APP_AV_STATE_DISCONNECTING = 6,
 };
 
 // sub states of APP_AV_STATE_CONNECTED
 enum {
-    APP_AV_MEDIA_STATE_IDLE,
-    APP_AV_MEDIA_STATE_STARTING,
-    APP_AV_MEDIA_STATE_STARTED,
-    APP_AV_MEDIA_STATE_STOPPING,
+    APP_AV_MEDIA_STATE_IDLE = 0,
+    APP_AV_MEDIA_STATE_STARTING = 1,
+    APP_AV_MEDIA_STATE_STARTED = 2,
+    APP_AV_MEDIA_STATE_STOPPING = 3,
 };
 
 typedef void (* bt_app_cb_t) (uint16_t event, void *param);
@@ -68,7 +69,6 @@ typedef void (* bt_app_copy_cb_t) (bt_app_msg_t *msg, void *p_dest, void *p_src)
 bool bt_app_work_dispatch(uint16_t event, void *p_params, int param_len);
 void a2dp_source_stop(void);
 char *bda2str(esp_bd_addr_t bda, char *str, size_t size);
-void perform_wipe_security_db(void);
 bool get_name_from_eir(uint8_t *eir, uint8_t *bdname, uint8_t *bdname_len);
 void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param);
 void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
@@ -83,4 +83,5 @@ void bt_app_av_state_disconnecting(uint16_t event, void *param);
 int  get_APP_AV_STATE();
 bool a2dp_source_init(String deviceName, String pinCode);
 void bt_loop();
+void print_status();
 #endif /* A2DP_SOURCE_H_ */
