@@ -147,7 +147,7 @@ void setup(){
 void loop(){
     bt_loop();
 }
-//--------------------------------------------CALLBACK------------------------------------------------------------------
+//---------------------------------------------EVENTS-------------------------------------------------------------------
 int32_t bt_data(uint8_t *data, int32_t len, uint32_t* sr){
     *sr = sampleRate;
     if (len < 0 || data == NULL) {
@@ -156,4 +156,7 @@ int32_t bt_data(uint8_t *data, int32_t len, uint32_t* sr){
     len = audiofile.read(data, len);
     if(len == 0) audiofile.seek(posDataSection); // EOF? enless loop
     return len;
+}
+void bt_info(const char* info){
+    Serial.printf("bt_info: %s\n", info);
 }
