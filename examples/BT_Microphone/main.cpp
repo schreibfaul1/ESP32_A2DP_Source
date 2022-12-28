@@ -50,12 +50,12 @@ void i2s_install(){
         i2s_config_t i2s_config_rx = {
         .mode = (i2s_mode_t) (I2S_MODE_MASTER | I2S_MODE_RX), // Only TX
         .sample_rate = sample_rate,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,    // Only 8-bit DAC support
-        .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,   // 2-channels
-        .communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_I2S_MSB,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,        // Interrupt level 1
-        .dma_buf_count = 16,                            // number of buffers, 128 max.
-        .dma_buf_len = 256,                          // size of each buffer
+        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT, // Only 8-bit DAC support
+        .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT, // 2-channels
+        .communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_I2S,
+        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1, // Interrupt level 1
+        .dma_buf_count = 16,                      // number of buffers, 128 max.
+        .dma_buf_len = 256,                       // size of each buffer
         .use_apll             = false,
         .tx_desc_auto_clear   = true,   // new in V1.0.1
         .fixed_mclk           = I2S_PIN_NO_CHANGE,
@@ -84,8 +84,8 @@ void setup(){
 //----------------------------------------------LOOP--------------------------------------------------------------------
 void loop() {
     bt_loop();
-//    char *buf_ptr_read1  = readBuff + 4; // connect L/R with ground
-    char *buf_ptr_read1  = readBuff;     // connect L/R with VDD
+//    char *buf_ptr_read1  = readBuff + 4; // connect L/R with VDD
+    char *buf_ptr_read1  = readBuff;     // connect L/R with GND
     char *buf_ptr_write1 = readBuff;
 
     if(buffStat == BUFF_EMPTY) {
